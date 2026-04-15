@@ -16,7 +16,7 @@ class UsagePaths:
 @dataclass(frozen=True)
 class ProviderConfig:
     provider: str
-    model: str
+    default_model: str
     temperature: float = 0.7
     usage_paths: UsagePaths = UsagePaths()
 

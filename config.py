@@ -1,13 +1,12 @@
 import os
 from ._types import *
 
-__all__ = ["PROVIDER_CATALOG", "MODEL_CATALOG"]
+__all__ = ["PROVIDER_CATALOG", "MODEL_CATALOG", "get_providers", "get_models", "get_models_for_provider", "get_default_model_for_provider"]
 
 PROVIDER_CATALOG: dict[str, ProviderConfig] = {
     "openai": ProviderConfig(
                 provider="openai",
-                model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
+                default_model="gpt-4.1-mini",
                 usage_paths=UsagePaths(
                     input_tokens="usage.input_tokens", 
                     output_tokens="usage.output_tokens", 
@@ -17,8 +16,7 @@ PROVIDER_CATALOG: dict[str, ProviderConfig] = {
                 )),
     "anthropic": ProviderConfig(
                 provider="anthropic",
-                model=os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest"),
-                temperature=float(os.getenv("ANTHROPIC_TEMPERATURE", "0.7")),
+                default_model="claude-sonnet",
                 usage_paths=UsagePaths(
                     input_tokens="usage.input_tokens", 
                     output_tokens="usage.output_tokens", 
@@ -28,8 +26,7 @@ PROVIDER_CATALOG: dict[str, ProviderConfig] = {
                 )),
     "gemini": ProviderConfig(
                 provider="gemini",
-                model=os.getenv("GEMINI_MODEL", "gemini-1.5-pro"),
-                temperature=float(os.getenv("GEMINI_TEMPERATURE", "0.7")),
+                default_model="gemini-1.5-pro",
                 usage_paths=UsagePaths(
                     input_tokens="usage.input_tokens", 
                     output_tokens="usage.output_tokens", 
@@ -73,3 +70,17 @@ MODEL_CATALOG: dict[str, ModelConfig] = {
                         supports_reasoning_tokens=False),
 }
 
+def get_providers() -> list[str]:
+    return list(PROVIDER_CATALOG.keys())
+
+def get_models() -> list[str]:
+    return list(MODEL_CATALOG.keys())
+
+def get_models_for_provider(provider: str) -> list[str]:
+    return [model_name for model_name, cfg in MODEL_CATALOG.items() if cfg.provider == provider]
+
+def get_default_model_for_provider(provider: str) -> str | None:
+    config = PROVIDER_CATALOG.get(provider)
+    if config is None:
+        return None
+    return config.default_model

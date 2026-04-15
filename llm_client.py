@@ -4,14 +4,15 @@ from typing import Any, Optional
 from anthropic import Anthropic
 from openai import OpenAI
 from google.genai import Client as Gemini
+from google.genai import types
 
-from ._config import *
+from .config import *
 from ._types import LLMResult, ProviderConfig, UsageBreakdown, CostBreakdown, ModelConfig
 from ._usage import normalize_token_usage, get_cost
 from .api_key import load_api_keys
 
 class LLMClient:
-    def __init__(self, provider: str, model: str | None = None) -> None:
+    def __init__(self, provider: str, model: str | None = None, temperature: float | None = None) -> None:
         config = PROVIDER_CATALOG.get(provider)
         if config is None:
             raise ValueError(f"Unsupported provider: {provider}")
@@ -23,7 +24,7 @@ class LLMClient:
         self.provider: str = provider
         self.config: ProviderConfig = config
         self.model: ModelConfig = model 
-        self.temperature: Optional[float] = config.temperature
+        self.temperature: Optional[float] = temperature if temperature is not None else 0.7
         self.client = self._build_client(provider)
 
     def query(
@@ -57,6 +58,7 @@ class LLMClient:
         )
 
     def _send_request(self, prompt: str, system_prompt: str | None = None):
+    
         if self.provider == "openai":
             input_payload: str | list[dict[str, str]]
 
@@ -70,12 +72,14 @@ class LLMClient:
 
             return self.client.responses.create(
                 model=self.model.model_name,
+                temperature=self.temperature,
                 input=input_payload,
             )
 
         if self.provider == "anthropic":
             return self.client.messages.create(
                 model=self.model.model_name,
+                temperature=self.temperature,
                 system=system_prompt if system_prompt is not None else "",
                 max_tokens=1024,
                 messages=[
@@ -84,6 +88,24 @@ class LLMClient:
                         "content": prompt,
                     }
                 ],
+            )
+
+        if self.provider == "gemini":
+
+            if system_prompt:
+                config = types.GenerateContentConfig(
+                    temperature=self.temperature,
+                    system_instruction=system_prompt,
+                )
+            else:
+                config = types.GenerateContentConfig(
+                    temperature=self.temperature,
+                )
+
+            return self.client.models.generate_content(
+                model=self.model.model_name,
+                contents=prompt,
+                config=config,
             )
 
         raise ValueError(f"Unsupported provider: {self.provider}")
@@ -102,7 +124,7 @@ class LLMClient:
             return "".join(parts)
         
         elif self.provider == "gemini":
-            return getattr(response, "candidates", [{}])[0].get("content", "") or ""
+            return getattr(response, "text", "") or ""
 
         raise ValueError(f"Unsupported provider: {self.provider}")
     
