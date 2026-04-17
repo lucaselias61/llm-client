@@ -6,10 +6,9 @@ from openai import OpenAI
 from google.genai import Client as Gemini
 from google.genai import types
 
-from .config import *
+from ._config import *
 from ._types import LLMResult, ProviderConfig, UsageBreakdown, CostBreakdown, ModelConfig
 from ._usage import normalize_token_usage, get_cost
-from .api_key import load_api_keys
 
 class LLMClient:
     def __init__(self, provider: str, model: str | None = None, temperature: float | None = None) -> None:
@@ -131,26 +130,21 @@ class LLMClient:
     @staticmethod
     def _build_client(provider: str):
 
-        try:
-            api_keys = load_api_keys()
-        except Exception as e:
-            print("Error loading API keys:", e)
-
         if provider == "openai":
             try:
-                return OpenAI(api_key=api_keys.get("OPENAI_API_KEY"))
+                return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             except Exception:
                 raise ValueError(f"Missing API key for provider: {provider}")
                 
         if provider == "anthropic":
             try:
-                return Anthropic(api_key=api_keys.get("ANTHROPIC_API_KEY"))
+                return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
             except Exception:
                 raise ValueError(f"Missing API key for provider: {provider}")
             
         if provider == "gemini":
             try:
-                return Gemini(api_key=api_keys.get("GEMINI_API_KEY"))
+                return Gemini(api_key=os.getenv("GEMINI_API_KEY"))
             except Exception:
                 raise ValueError(f"Missing API key for provider: {provider}")
 

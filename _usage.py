@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from decimal import Decimal
 
-from .config import *
+from ._config import *
 from ._types import *
 
 __all__ = ["get_cost", "normalize_token_usage", "get_nested_attr"]
