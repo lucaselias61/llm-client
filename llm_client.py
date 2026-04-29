@@ -71,6 +71,7 @@ class LLMClient:
                 {"type": "input_text", "text": kwargs.get("prompt")},
                 {"type": "input_image", "image_url": f"data:{kwargs.get('image_media_type')};base64,{kwargs.get('image_b64')}"} if kwargs.get("image_b64") else None,
             ]
+            user_content = [item for item in user_content if item is not None]
             input_payload: list[dict] = []
             if kwargs.get("system_prompt"):
                 input_payload.append({"role": "system", "content": kwargs.get("system_prompt")})
@@ -93,6 +94,7 @@ class LLMClient:
                 } if kwargs.get("image_b64") else None,
                 {"type": "text", "text": kwargs.get("prompt")},
             ]
+            user_content = [item for item in user_content if item is not None]
             return self.client.messages.create(
                 model=self.model.model_name,
                 temperature=self.temperature,
@@ -115,10 +117,12 @@ class LLMClient:
             return self.client.models.generate_content(
                 model=self.model.model_name,
                 contents=[
-                    types.Part(inline_data=types.Blob(
-                        mime_type=kwargs.get("image_media_type"), data=raw_bytes,
-                    )) if kwargs.get("image_b64") else None,
-                    kwargs.get("prompt"),
+                    item for item in [
+                        types.Part(inline_data=types.Blob(
+                            mime_type=kwargs.get("image_media_type"), data=raw_bytes,
+                        )) if kwargs.get("image_b64") else None,
+                        kwargs.get("prompt"),
+                    ] if item is not None
                 ],
                 config=config,
             )
