@@ -32,6 +32,7 @@ class LLMClient:
         prompt: str,
         system_prompt: Optional[str] = None,
         return_usage: bool = False,
+        timeout: Optional[float] = None,
         image_b64: Optional[str] = None,
         image_media_type: Optional[str] = "image/jpeg",
     ) -> LLMResult:
@@ -39,6 +40,7 @@ class LLMClient:
         response = self._send_request(
             prompt=prompt,
             system_prompt=system_prompt,
+            timeout=timeout,
             image_b64=image_b64,
             image_media_type=image_media_type,
         )
@@ -81,6 +83,7 @@ class LLMClient:
                 model=self.model.model_name,
                 temperature=self.temperature,
                 input=input_payload,
+                timeout=kwargs.get("timeout"),
             )
 
         if self.provider == "anthropic":
@@ -101,19 +104,16 @@ class LLMClient:
                 system=kwargs.get("system_prompt") or "",
                 max_tokens=4096,
                 messages=[{"role": "user", "content": user_content}],
+                timeout=kwargs.get("timeout"),
             )
 
         if self.provider == "gemini":
             raw_bytes = base64.b64decode(kwargs.get("image_b64"))
-            if kwargs.get("system_prompt"):
-                config = types.GenerateContentConfig(
-                    temperature=self.temperature,
-                    system_instruction=kwargs.get("system_prompt"),
-                )
-            else:
-                config = types.GenerateContentConfig(
-                    temperature=self.temperature,
-                )
+            config = types.GenerateContentConfig(
+                temperature=self.temperature,
+                system_instruction=kwargs.get("system_prompt") if kwargs.get("system_prompt") else None,
+                http_options=types.HttpOptions(timeout=kwargs.get("timeout")),
+            )
             return self.client.models.generate_content(
                 model=self.model.model_name,
                 contents=[
