@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 from decimal import Decimal
 
 __all_ = ["ModelConfig", "ProviderConfig", "UsagePaths", "UsageBreakdown", "CostBreakdown", "ModelPricing", "LLMResult", "asdict"]
@@ -42,6 +42,9 @@ class UsageBreakdown:
     audio_output_tokens: int = 0
     image_input_tokens: int = 0
     total_tokens: int = 0
+
+    def __add__(self, other: UsageBreakdown) -> UsageBreakdown:
+        return UsageBreakdown(**{f.name: getattr(self, f.name) + getattr(other, f.name) for f in fields(self)})
 
     def __str__(self) -> str:
 
@@ -89,6 +92,9 @@ class CostBreakdown:
     audio_output_cost_USD: Decimal = Decimal(0)
     image_input_cost_USD: Decimal = Decimal(0)
     total_cost_USD: Decimal = Decimal(0)
+
+    def __add__(self, other: CostBreakdown) -> CostBreakdown:
+        return CostBreakdown(**{f.name: getattr(self, f.name) + getattr(other, f.name) for f in fields(self)})
 
     def __str__(self) -> str:
         def fmt(value: Decimal | None) -> str:
