@@ -79,12 +79,14 @@ class LLMClient:
                 input_payload.append({"role": "system", "content": kwargs.get("system_prompt")})
             input_payload.append({"role": "user", "content": user_content})
 
-            return self.client.responses.create(
-                model=self.model.model_name,
-                temperature=self.temperature,
-                input=input_payload,
-                timeout=kwargs.get("timeout"),
-            )
+            request_kwargs: dict[str, Any] = {
+                "model": self.model.model_name,
+                "input": input_payload,
+                "timeout": kwargs.get("timeout"),
+            }
+            if not self.model.model_name.startswith(("gpt-5", "o1", "o3", "o4")):
+                request_kwargs["temperature"] = self.temperature
+            return self.client.responses.create(**request_kwargs)
 
         if self.provider == "anthropic":
             user_content = [
