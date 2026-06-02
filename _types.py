@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict, fields
+from dataclasses import dataclass, asdict, field, fields
 from decimal import Decimal
 
 __all_ = ["ModelConfig", "ProviderConfig", "UsagePaths", "UsageBreakdown", "CostBreakdown", "ModelPricing", "LLMResult", "asdict"]
@@ -21,6 +21,7 @@ class ProviderConfig:
     default_model: str
     temperature: float = 0.7
     usage_paths: UsagePaths = UsagePaths()
+    embeddings_model: str | None = None
 
 @dataclass(frozen=True)
 class ModelConfig:
@@ -122,12 +123,21 @@ class CostBreakdown:
         if self.total_cost_USD:
             lines.append(f"  Total:          ${fmt(self.total_cost_USD)}")
         return "\n".join(lines)
+    
+@dataclass
+class Usage:
+    tokens: UsageBreakdown = field(default_factory=UsageBreakdown)
+    cost: CostBreakdown = field(default_factory=CostBreakdown)
+
+    def __add__(self, other: Usage) -> Usage:
+        return Usage(tokens=self.tokens + other.tokens, cost=self.cost + other.cost)
+
+    def __str__(self) -> str:
+        return f"{self.tokens}\n{self.cost}"
 
 @dataclass(frozen=True)
 class LLMResult:
     provider: str
     model: str
     text: str
-    usage: UsageBreakdown
-    cost: CostBreakdown
-    raw_response_id: str | None = None
+    usage: Usage

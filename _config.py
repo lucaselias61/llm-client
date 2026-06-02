@@ -8,12 +8,14 @@ PROVIDER_CATALOG: dict[str, ProviderConfig] = {
                 provider="openai",
                 default_model="gpt-4.1-mini",
                 usage_paths=UsagePaths(
-                    input_tokens="usage.input_tokens", 
-                    output_tokens="usage.output_tokens", 
-                    total_tokens="usage.total_tokens", 
-                    cached_input_tokens="usage.input_tokens_details.cached_tokens", 
-                    reasoning_tokens="usage.output_tokens_details.reasoning_tokens"
-                )),
+                    input_tokens="usage.prompt_tokens",
+                    output_tokens="usage.completion_tokens",
+                    total_tokens="usage.total_tokens",
+                    cached_input_tokens="usage.prompt_tokens_details.cached_tokens",
+                    reasoning_tokens="usage.completion_tokens_details.reasoning_tokens"
+                ),
+                embeddings_model="text-embedding-3-small",
+    ),
     "anthropic": ProviderConfig(
                 provider="anthropic",
                 default_model="claude-sonnet",
@@ -23,7 +25,9 @@ PROVIDER_CATALOG: dict[str, ProviderConfig] = {
                     total_tokens="usage.total_tokens", 
                     cached_input_tokens="usage.input_tokens_details.cached_tokens", 
                     reasoning_tokens="usage.output_tokens_details.reasoning_tokens"
-                )),
+                ),
+                embeddings_model=None,
+    ),
     "gemini": ProviderConfig(
                 provider="gemini",
                 default_model="gemini-1.5-pro",
@@ -33,7 +37,9 @@ PROVIDER_CATALOG: dict[str, ProviderConfig] = {
                     total_tokens="usage.total_tokens", 
                     cached_input_tokens="usage.input_tokens_details.cached_tokens", 
                     reasoning_tokens="usage.output_tokens_details.reasoning_tokens"
-                ))
+                ),
+                embeddings_model=None,
+    )
 }
 
 
