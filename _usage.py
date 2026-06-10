@@ -43,18 +43,19 @@ def normalize_token_usage(provider: str, response: object | None) -> UsageBreakd
     provider_config: ProviderConfig = PROVIDER_CATALOG[provider]
     usage_paths: UsagePaths = provider_config.usage_paths
 
-    input_tokens = get_nested_attr(response, usage_paths.input_tokens, 0) or 0
-    output_tokens = get_nested_attr(response, usage_paths.output_tokens, 0) or 0
-    cached_input_tokens = get_nested_attr(response, usage_paths.cached_input_tokens, 0) or 0
-    reasoning_tokens = get_nested_attr(response, usage_paths.reasoning_tokens, 0) or 0
-    total_tokens = get_nested_attr(response, usage_paths.total_tokens, 0) or 0
+    def read(path: str | None) -> int:
+        if path is None:
+            return 0
+        return get_nested_attr(response, path, 0) or 0
 
     return UsageBreakdown(
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        cached_input_tokens=cached_input_tokens,
-        reasoning_tokens=reasoning_tokens,
-        total_tokens=total_tokens
+        input_tokens=read(usage_paths.input_tokens),
+        output_tokens=read(usage_paths.output_tokens),
+        cached_input_tokens=read(usage_paths.cached_input_tokens),
+        cache_creation_input_tokens=read(usage_paths.cache_creation_input_tokens),
+        cache_read_input_tokens=read(usage_paths.cache_read_input_tokens),
+        reasoning_tokens=read(usage_paths.reasoning_tokens),
+        total_tokens=read(usage_paths.total_tokens),
     )
 
 def get_nested_attr(obj, path: str, default=None):

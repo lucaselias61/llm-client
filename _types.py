@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict, field, fields
 from decimal import Decimal
 
-__all_ = ["ModelConfig", "ProviderConfig", "UsagePaths", "UsageBreakdown", "CostBreakdown", "ModelPricing", "LLMResult", "asdict"]
+__all__ = ["ModelConfig", "ProviderConfig", "UsagePaths", "UsageBreakdown", "CostBreakdown", "ModelPricing", "Usage", "LLMResult", "asdict"]
 
 @dataclass(frozen=True)
 class UsagePaths:
@@ -21,7 +21,6 @@ class ProviderConfig:
     default_model: str
     temperature: float = 0.7
     usage_paths: UsagePaths = UsagePaths()
-    embeddings_model: str | None = None
 
 @dataclass(frozen=True)
 class ModelConfig:

@@ -159,10 +159,13 @@ class LLMClient:
         input: str,
     ) -> list[float]:
 
-        if self.config.embeddings_model is None:
-            raise ValueError(f"Provider {self.model.provider} does not support embeddings")
+        if self.model.provider != "openai":
+            raise ValueError(
+                f"Provider {self.model.provider} does not support embeddings; "
+                f"embeddings require the OpenAI provider ({EMBEDDINGS_MODEL})"
+            )
         response = await self.client.embeddings.create(
-            model=self.config.embeddings_model,
+            model=EMBEDDINGS_MODEL,
             input=input,
         )
         self._add_response_usage(response)
