@@ -41,6 +41,8 @@ class LLMClient:
 
     async def query(self, **kwargs: Any) -> Any:
         provider = self.model.provider
+        # The client already knows its model; passing it again is how the two drifted apart.
+        kwargs.setdefault("model", self.model.model_name)
 
         async with self._semaphore:
             if provider == "openai":
@@ -56,9 +58,9 @@ class LLMClient:
 
     async def _openai_query(
         self,
-        model: str,
-        temperature: float,
         prompt: str,
+        model: str,
+        temperature: float = 0.7,
         system_prompt: Optional[str] = None,
         timeout: Optional[float] = None,
         text_format: Any = None
