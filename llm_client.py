@@ -71,10 +71,12 @@ class LLMClient:
                 {"role": "system", "content": system_prompt or ""},
                 {"role": "user", "content": prompt},
             ],
-            "temperature": temperature,
             "max_output_tokens": 4096,
             "timeout": timeout,
         }
+        # Reasoning models reject `temperature` outright.
+        if not model.startswith(("gpt-5", "o1", "o3", "o4")):
+            request["temperature"] = temperature
         # The API rejects anything that is not a Pydantic model, None included.
         schema = text_format if isinstance(text_format, type) and issubclass(text_format, BaseModel) else None
         if schema is not None:
