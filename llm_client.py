@@ -23,7 +23,7 @@ class LLMClient:
     def __init__(
             self,  
             model_name: str = "gpt-4.1-mini", 
-            max_concurrency: int = 5
+            max_concurrency: int = 50
     ) -> None:
         model = MODEL_CATALOG.get(model_name) 
         if model is None:
