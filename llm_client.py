@@ -9,15 +9,9 @@ from google.genai import Client as Gemini
 from google.genai import types
 
 from ._config import *
-from ._types import ProviderConfig, Usage, ModelConfig
-from ._usage import normalize_token_usage, get_cost
+from ._usage import *
 
-
-_OPENAI_JSON_FORMAT = {"type": "json_object"}
-
-
-class LLMClient:
-    temperature: float 
+class LLMClient: 
     model: ModelConfig
     config: ProviderConfig
     client: AsyncOpenAI | AsyncAnthropic | Gemini
@@ -27,7 +21,6 @@ class LLMClient:
     def __init__(
             self,  
             model_name: str = "gpt-4.1-mini", 
-            temperature: float = 0.7, 
             max_concurrency: int = 5
     ) -> None:
         model = MODEL_CATALOG.get(model_name) 
@@ -39,120 +32,116 @@ class LLMClient:
 
         self.config: ProviderConfig = config
         self.model: ModelConfig = model
-        self.temperature: float = temperature
         self.client = self._build_client(model.provider)
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self.usage = Usage()
         self.last_usage = Usage()
 
-    async def query(
-        self,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        *,
-        temperature: Optional[float] = None,
-        timeout: Optional[float] = None,
-        image_b64: Optional[str] = None,
-        image_media_type: Optional[str] = "image/jpeg",
-        response_format: str | type | dict | None = None,
-    ) -> str | list[float]:
-
-        if response_format == "embedding" or response_format is list[float]:
-            async with self._semaphore:
-                return await self._generate_embedding(prompt)
-
-        if response_format == "json":
-            response_format = _OPENAI_JSON_FORMAT
-
-        async with self._semaphore:
-            response = await self._send_request(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=temperature if temperature is not None else self.temperature,
-                timeout=timeout,
-                image_b64=image_b64,
-                image_media_type=image_media_type,
-                response_format=response_format,
-            )
-        return self._extract_text(response)
-            
-
-    async def _send_request(self, **kwargs: Any) -> Any:
+    async def query(self, **kwargs: Any) -> Any:
         provider = self.model.provider
 
-        if provider == "openai":
-            user_content: list[dict[str, Any]] = [
-                {"type": "text", "text": kwargs.get("prompt")},
-            ]
-            if kwargs.get("image_b64"):
-                user_content.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{kwargs.get('image_media_type')};base64,{kwargs.get('image_b64')}",
-                    },
-                })
-            messages: list[dict[str, Any]] = []
-            if kwargs.get("system_prompt"):
-                messages.append({"role": "system", "content": kwargs.get("system_prompt")})
-            messages.append({"role": "user", "content": user_content})
-
-            request_kwargs: dict[str, Any] = {
-                "model": self.model.model_name,
-                "messages": messages,
-                "timeout": kwargs.get("timeout"),
-            }
-            if kwargs.get("response_format") is not None:
-                request_kwargs["response_format"] = kwargs.get("response_format")
-            if not self.model.model_name.startswith(("gpt-5", "o1", "o3", "o4")):
-                request_kwargs["temperature"] = kwargs.get("temperature")
-            response = await self.client.chat.completions.create(**request_kwargs)
-
-        elif provider == "anthropic":
-            user_content = [
-                {"type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": kwargs.get("image_media_type"),
-                        "data": kwargs.get("image_b64"),
-                    },
-                } if kwargs.get("image_b64") else None,
-                {"type": "text", "text": kwargs.get("prompt")},
-            ]
-            user_content = [item for item in user_content if item is not None]
-            response = await self.client.messages.create(
-                model=self.model.model_name,
-                temperature=kwargs.get("temperature"),
-                system=kwargs.get("system_prompt") or "",
-                max_tokens=4096,
-                messages=[{"role": "user", "content": user_content}],
-                timeout=kwargs.get("timeout"),
-            )
-
-        elif provider == "gemini":
-            config = types.GenerateContentConfig(
-                temperature=kwargs.get("temperature"),
-                system_instruction=kwargs.get("system_prompt") if kwargs.get("system_prompt") else None,
-                http_options=types.HttpOptions(timeout=kwargs.get("timeout")),
-            )
-            contents: list[Any] = []
-            if kwargs.get("image_b64"):
-                raw_bytes = base64.b64decode(kwargs.get("image_b64"))
-                contents.append(types.Part(inline_data=types.Blob(
-                    mime_type=kwargs.get("image_media_type"), data=raw_bytes,
-                )))
-            contents.append(kwargs.get("prompt"))
-            response = await self.client.aio.models.generate_content(
-                model=self.model.model_name,
-                contents=contents,
-                config=config,
-            )
-
-        else:
-            raise ValueError(f"Unsupported provider: {provider}")
-    
-        self._add_response_usage(response)
+        async with self._semaphore:
+            if provider == "openai":
+                response = await self._openai_query(**kwargs)
+            elif provider == "anthropic":
+                response = await self._anthropic_query(**kwargs)
+            elif provider == "gemini":
+                response = await self._gemini_query(**kwargs)
+            else:
+                raise ValueError(f"Unsupported provider: {provider}")
+            
         return response
-    
+
+    async def _openai_query(
+        self,
+        model: str,
+        temperature: float,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        timeout: Optional[float] = None,
+        text_format: Any = None
+    ) -> Any:
+        response = await self.client.responses.parse(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt or ""},
+                {"role": "user", "content": prompt},
+            ],
+            text_format=text_format,
+            temperature=temperature,
+            max_output_tokens=4096,
+            timeout=timeout,
+        )
+        
+        self._add_response_usage(
+            input_tokens = response.usage.input_tokens,
+            cached_tokens = response.usage.input_tokens_details.cached_tokens,
+            output_tokens = response.usage.output_tokens,
+            reasoning_tokens = response.usage.output_tokens_details.reasoning_tokens,
+        )
+
+        try:
+            parsed = response.output_parsed
+        except Exception as e:
+            raise ValueError(f"Failed to parse response: {e}") from e
+       
+        return parsed
+
+    async def _anthropic_query(
+        self,
+        prompt: str,
+        model: str,
+        temperature: float = 0.7,
+        system_prompt: Optional[str] = None,
+        timeout: Optional[float] = None,
+        text_format: Any = None
+    ) -> Any:
+        response = await self.client.messages.create(
+            model=model,
+            temperature=temperature,
+            system=system_prompt or "",
+            max_tokens=4096,
+            messages=[
+                {"role": "user", "content": prompt},
+            ],
+            timeout=timeout,
+        )
+        self._add_response_usage(
+            input_tokens=response.usage.input_tokens,
+            cached_tokens=response.usage.cache_creation_input_tokens,
+            output_tokens=response.usage.output_tokens,
+            reasoning_tokens=response.usage.output_tokens_details.thinking_tokens,
+        )
+        return self._extract_text(response)
+
+    async def _gemini_query(
+        self,
+        prompt: str,
+        model: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        timeout: Optional[float] = None,
+        text_format: Any = None
+    ) -> Any:
+        config = types.GenerateContentConfig(
+            temperature=temperature,
+            system_instruction=system_prompt if system_prompt else None,
+            http_options=types.HttpOptions(timeout=timeout),
+        )
+        contents: list[Any] = []
+        contents.append(prompt)
+        response = await self.client.aio.models.generate_content(
+            model=model,
+            contents=contents,
+            config=config,
+        )
+        self._add_response_usage(
+            input_tokens=response.usage_metadata.prompt_token_count,
+            cached_input_tokens=response.usage_metadata.cached_content_token_count,
+            output_tokens=response.usage_metadata.candidates_token_count,
+            reasoning_tokens=response.usage_metadata.thoughts_token_count,
+        )
+        return self._extract_text(response)
     
     async def _generate_embedding(
         self,
@@ -215,8 +204,8 @@ class LLMClient:
 
         raise ValueError(f"Unknown provider: {provider}")
     
-    def _add_response_usage(self, response: Any) -> None:
-        token_usage = normalize_token_usage(self.model.provider, response)
-        cost = get_cost(self.model, token_usage)
-        self.last_usage = Usage(tokens=token_usage, cost=cost)
+    def _add_response_usage(self, **kwargs) -> None:
+        self.last_usage = get_usage(self.model, UsageBreakdown(**kwargs))
         self.usage += self.last_usage
+
+    

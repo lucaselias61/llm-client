@@ -1,7 +1,30 @@
-import os
-from ._types import *
+from __future__ import annotations
 
-__all__ = ["PROVIDER_CATALOG", "MODEL_CATALOG", "EMBEDDINGS_MODEL", "get_providers", "get_models", "get_models_for_provider", "get_default_model_for_provider"]
+from dataclasses import dataclass
+
+__all__ = ["ProviderConfig", "ModelConfig", "ModelPricing", "PROVIDER_CATALOG", "MODEL_CATALOG", "EMBEDDINGS_MODEL", "get_providers", "get_models", "get_models_for_provider", "get_default_model_for_provider"]
+
+@dataclass(frozen=True)
+class ProviderConfig:
+    provider: str
+    default_model: str
+
+@dataclass(frozen=True)
+class ModelConfig:
+    provider: str
+    model_name: str
+    pricing: ModelPricing
+    supports_reasoning_tokens: bool = False
+    notes: str | None = None
+
+@dataclass(frozen=True)
+class ModelPricing:
+    input_per_1m: float
+    output_per_1m: float
+    cached_input_per_1m: float | None = None
+    training_per_1m: float | None = None
+    cache_creation_input_per_1m: float | None = None
+    cache_read_input_per_1m: float | None = None
 
 # The only supported embedding model; embeddings always go through OpenAI.
 EMBEDDINGS_MODEL = "text-embedding-3-small"
@@ -10,37 +33,16 @@ PROVIDER_CATALOG: dict[str, ProviderConfig] = {
     "openai": ProviderConfig(
                 provider="openai",
                 default_model="gpt-4.1-mini",
-                usage_paths=UsagePaths(
-                    input_tokens="usage.prompt_tokens",
-                    output_tokens="usage.completion_tokens",
-                    total_tokens="usage.total_tokens",
-                    cached_input_tokens="usage.prompt_tokens_details.cached_tokens",
-                    reasoning_tokens="usage.completion_tokens_details.reasoning_tokens"
-                ),
     ),
     "anthropic": ProviderConfig(
                 provider="anthropic",
                 default_model="claude-sonnet",
-                usage_paths=UsagePaths(
-                    input_tokens="usage.input_tokens",
-                    output_tokens="usage.output_tokens",
-                    cache_creation_input_tokens="usage.cache_creation_input_tokens",
-                    cache_read_input_tokens="usage.cache_read_input_tokens",
-                ),
     ),
     "gemini": ProviderConfig(
                 provider="gemini",
                 default_model="gemini-1.5-pro",
-                usage_paths=UsagePaths(
-                    input_tokens="usage_metadata.prompt_token_count",
-                    output_tokens="usage_metadata.candidates_token_count",
-                    total_tokens="usage_metadata.total_token_count",
-                    cached_input_tokens="usage_metadata.cached_content_token_count",
-                    reasoning_tokens="usage_metadata.thoughts_token_count",
-                ),
     )
 }
-
 
 MODEL_CATALOG: dict[str, ModelConfig] = {
     "gpt-4.1-mini": ModelConfig(
