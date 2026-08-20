@@ -8,6 +8,8 @@ from openai import AsyncOpenAI
 from google.genai import Client as Gemini
 from google.genai import types
 
+from pydantic import BaseModel
+
 from ._config import *
 from ._usage import *
 
@@ -61,31 +63,37 @@ class LLMClient:
         timeout: Optional[float] = None,
         text_format: Any = None
     ) -> Any:
-        response = await self.client.responses.parse(
-            model=model,
-            input=[
+        request: dict[str, Any] = {
+            "model": model,
+            "input": [
                 {"role": "system", "content": system_prompt or ""},
                 {"role": "user", "content": prompt},
             ],
-            text_format=text_format,
-            temperature=temperature,
-            max_output_tokens=4096,
-            timeout=timeout,
-        )
-        
+            "temperature": temperature,
+            "max_output_tokens": 4096,
+            "timeout": timeout,
+        }
+        # The API rejects anything that is not a Pydantic model, None included.
+        schema = text_format if isinstance(text_format, type) and issubclass(text_format, BaseModel) else None
+        if schema is not None:
+            request["text_format"] = schema
+
+        response = await self.client.responses.parse(**request)
+
         self._add_response_usage(
-            input_tokens = response.usage.input_tokens,
-            cached_tokens = response.usage.input_tokens_details.cached_tokens,
-            output_tokens = response.usage.output_tokens,
-            reasoning_tokens = response.usage.output_tokens_details.reasoning_tokens,
+            input_tokens=response.usage.input_tokens,
+            cached_tokens=response.usage.input_tokens_details.cached_tokens,
+            output_tokens=response.usage.output_tokens,
+            reasoning_tokens=response.usage.output_tokens_details.reasoning_tokens,
         )
 
+        if schema is None:
+            return response.output_text
+
         try:
-            parsed = response.output_parsed
+            return response.output_parsed
         except Exception as e:
             raise ValueError(f"Failed to parse response: {e}") from e
-       
-        return parsed
 
     async def _anthropic_query(
         self,
@@ -106,11 +114,14 @@ class LLMClient:
             ],
             timeout=timeout,
         )
+        # Only present when extended thinking is on.
+        output_details = response.usage.output_tokens_details
         self._add_response_usage(
             input_tokens=response.usage.input_tokens,
-            cached_tokens=response.usage.cache_creation_input_tokens,
+            cache_creation_input_tokens=response.usage.cache_creation_input_tokens or 0,
+            cache_read_input_tokens=response.usage.cache_read_input_tokens or 0,
             output_tokens=response.usage.output_tokens,
-            reasoning_tokens=response.usage.output_tokens_details.thinking_tokens,
+            reasoning_tokens=output_details.thinking_tokens if output_details else 0,
         )
         return self._extract_text(response)
 
@@ -136,10 +147,10 @@ class LLMClient:
             config=config,
         )
         self._add_response_usage(
-            input_tokens=response.usage_metadata.prompt_token_count,
-            cached_input_tokens=response.usage_metadata.cached_content_token_count,
-            output_tokens=response.usage_metadata.candidates_token_count,
-            reasoning_tokens=response.usage_metadata.thoughts_token_count,
+            input_tokens=response.usage_metadata.prompt_token_count or 0,
+            cached_tokens=response.usage_metadata.cached_content_token_count or 0,
+            output_tokens=response.usage_metadata.candidates_token_count or 0,
+            reasoning_tokens=response.usage_metadata.thoughts_token_count or 0,
         )
         return self._extract_text(response)
     

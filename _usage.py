@@ -108,10 +108,10 @@ def _get_cost(model: ModelConfig, usage: UsageBreakdown) -> CostBreakdown:
     costs = CostBreakdown()
 
     if model.provider == "openai":
-        non_cached_input_tokens = usage.input_tokens - usage.cached_input_tokens
+        non_cached_input_tokens = usage.input_tokens - usage.cached_tokens
         costs.input_cost_USD = (Decimal(non_cached_input_tokens) / Decimal(1_000_000)) * Decimal(str(pricing.input_per_1m))
         costs.output_cost_USD = (Decimal(usage.output_tokens) / Decimal(1_000_000)) * Decimal(str(pricing.output_per_1m))
-        costs.cached_input_cost_USD = (Decimal(usage.cached_input_tokens) / Decimal(1_000_000)) * Decimal(str(pricing.cached_input_per_1m))
+        costs.cached_input_cost_USD = (Decimal(usage.cached_tokens) / Decimal(1_000_000)) * Decimal(str(pricing.cached_input_per_1m))
         costs.total_cost_USD = costs.input_cost_USD + costs.output_cost_USD + costs.cached_input_cost_USD
     
     elif model.provider == "anthropic":
