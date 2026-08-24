@@ -14,7 +14,8 @@ class ModelConfig:
     provider: str
     model_name: str
     pricing: ModelPricing
-    supports_reasoning_tokens: bool = False
+    # Reasoning models reject `temperature`, and their reasoning counts toward the output cap.
+    reasoning_model: bool = False
     notes: str | None = None
 
 @dataclass(frozen=True)
@@ -54,7 +55,7 @@ MODEL_CATALOG: dict[str, ModelConfig] = {
                             output_per_1m=3.20, 
                             training_per_1m=5.00
                         ),
-                        supports_reasoning_tokens=True),
+                        reasoning_model=False),
     "gpt-5-mini": ModelConfig(
                         provider="openai",
                         model_name="gpt-5-mini",
@@ -64,7 +65,7 @@ MODEL_CATALOG: dict[str, ModelConfig] = {
                             output_per_1m=2.0, 
                             training_per_1m=None
                         ),
-                        supports_reasoning_tokens=False),
+                        reasoning_model=True),
     "claude-sonnet": ModelConfig(
                         provider="anthropic",
                         model_name="claude-sonnet",
@@ -74,7 +75,7 @@ MODEL_CATALOG: dict[str, ModelConfig] = {
                             cache_creation_input_per_1m=3.75, 
                             cache_read_input_per_1m=0.30
                         ),
-                        supports_reasoning_tokens=False),
+                        reasoning_model=False),
 }
 
 def get_providers() -> list[str]:

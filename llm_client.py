@@ -63,7 +63,8 @@ class LLMClient:
         temperature: float = 0.7,
         system_prompt: Optional[str] = None,
         timeout: Optional[float] = None,
-        text_format: Any = None
+        text_format: Any = None,
+        max_output_tokens: int = 4096,
     ) -> Any:
         request: dict[str, Any] = {
             "model": model,
@@ -71,11 +72,10 @@ class LLMClient:
                 {"role": "system", "content": system_prompt or ""},
                 {"role": "user", "content": prompt},
             ],
-            "max_output_tokens": 4096,
+            "max_output_tokens": max_output_tokens,
             "timeout": timeout,
         }
-        # Reasoning models reject `temperature` outright.
-        if not model.startswith(("gpt-5", "o1", "o3", "o4")):
+        if not self.model.reasoning_model:
             request["temperature"] = temperature
         # The API rejects anything that is not a Pydantic model, None included.
         schema = text_format if isinstance(text_format, type) and issubclass(text_format, BaseModel) else None
@@ -106,13 +106,14 @@ class LLMClient:
         temperature: float = 0.7,
         system_prompt: Optional[str] = None,
         timeout: Optional[float] = None,
-        text_format: Any = None
+        text_format: Any = None,
+        max_output_tokens: int = 4096,
     ) -> Any:
         response = await self.client.messages.create(
             model=model,
             temperature=temperature,
             system=system_prompt or "",
-            max_tokens=4096,
+            max_tokens=max_output_tokens,
             messages=[
                 {"role": "user", "content": prompt},
             ],
@@ -136,10 +137,12 @@ class LLMClient:
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
         timeout: Optional[float] = None,
-        text_format: Any = None
+        text_format: Any = None,
+        max_output_tokens: int = 4096,
     ) -> Any:
         config = types.GenerateContentConfig(
             temperature=temperature,
+            max_output_tokens=max_output_tokens,
             system_instruction=system_prompt if system_prompt else None,
             http_options=types.HttpOptions(timeout=timeout),
         )
