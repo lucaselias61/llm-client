@@ -223,6 +223,11 @@ class LLMClient:
         raise ValueError(f"Unknown provider: {provider}")
     
     def _add_response_usage(self, **kwargs) -> None:
+        # No provider reports a total, so derive one. Reasoning is already inside
+        # output_tokens, and cached tokens inside input_tokens, so neither is added again.
+        kwargs.setdefault(
+            "total_tokens", kwargs.get("input_tokens", 0) + kwargs.get("output_tokens", 0)
+        )
         self.last_usage = get_usage(self.model, UsageBreakdown(**kwargs))
         self.usage += self.last_usage
 
