@@ -10,7 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
     "anthropic>=1.4.0",
     "google-genai>=2.22.0",
-    "openai>=1.0.0,<2.0.0",
+    "openai>=1.66.0",
     "pydantic>=2.13.5",
     "typesafe-sdk>=0.7.5",
 ]
