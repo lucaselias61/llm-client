@@ -8,6 +8,14 @@
 - add CHANGELOG - (90099c1) - lucaselias61
 
 - - -
+## v3.0.0 - 2026-11-16
+#### Features
+- <span style="background-color: #d73a49; color: white; padding: 2px 6px; border-radius: 3px; font-weight: bold; font-size: 0.85em;">BREAKING</span>update model catalog to current provider models - (9ceafd8) - lucaselias61
+#### Build system
+- (**deps**) support openai 1.66.0 and later - (24894b1) - lucaselias61
+
+- - -
+
 ## v2.1.1 - 2026-10-26
 #### Bug Fixes
 - correct environment variable name for API key in TypeSafeAIClient - (6a32bc4) - lucaselias61

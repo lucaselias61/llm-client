@@ -18,7 +18,7 @@ from .google import GoogleClient
 from .openai import OpenAIClient
 from .typesafeai import TypeSafeAIClient
 
-__version__ = "2.1.1"
+__version__ = "3.0.0"
 __author__ = "Lucas Passadore Elias"
 
 __all__ = [
