@@ -35,14 +35,14 @@ class AnthropicClient(Client):
             "timeout": timeout,
         }
         if text_format is None:
-            response = await self.client.messages.create(
-                **request, temperature=temperature
-            )
+            if not self.model.reasoning_model:
+                request["temperature"] = temperature
+            response = await self.client.messages.create(**request)
         else:
+            if not self.model.reasoning_model:
+                request["extra_body"] = {"temperature": temperature}
             response = await self.client.messages.parse(
-                **request,
-                output_format=text_format,
-                extra_body={"temperature": temperature},
+                **request, output_format=text_format
             )
         usage = response.usage
         details = getattr(usage, "output_tokens_details", None)

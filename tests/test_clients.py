@@ -68,10 +68,11 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         sdk = NS(responses=NS(parse=AsyncMock(return_value=openai_response())))
         client = make_client(OpenAIClient, sdk)
         self.assertEqual(await client.query(prompt="hi"), "hello")
-        self.assertEqual(sdk.responses.parse.call_args.kwargs["model"], "gpt-4.1-mini")
+        self.assertEqual(sdk.responses.parse.call_args.kwargs["model"], "gpt-6-luna")
         self.assertNotIn("text_format", sdk.responses.parse.call_args.kwargs)
+        self.assertNotIn("temperature", sdk.responses.parse.call_args.kwargs)
         self.assertEqual(client.last_usage.tokens.total_tokens, 120)
-        self.assertEqual(client.usage.cost.total_cost_USD, Decimal("0.000138"))
+        self.assertEqual(client.usage.cost.total_cost_USD, Decimal("0.0000191"))
         await client.query(prompt="hi")
         self.assertEqual(client.usage.tokens.total_tokens, 240)
         with self.assertRaisesRegex(ValueError, "different model"):
@@ -96,7 +97,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         response = Message.model_validate(
             {
                 "id": "msg_test",
-                "model": "claude-sonnet",
+                "model": "claude-sonnet-5-5",
                 "role": "assistant",
                 "type": "message",
                 "content": [{"type": "text", "text": "hello"}],
@@ -113,9 +114,13 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         sdk = NS(messages=NS(create=AsyncMock(return_value=response)))
         client = make_client(AnthropicClient, sdk)
         self.assertEqual(await client.query(prompt="hi"), "hello")
+        self.assertEqual(
+            sdk.messages.create.call_args.kwargs["model"], "claude-sonnet-5-5"
+        )
+        self.assertNotIn("temperature", sdk.messages.create.call_args.kwargs)
         self.assertEqual(client.usage.tokens.cache_creation_input_tokens, 10)
         self.assertEqual(client.usage.tokens.cache_read_input_tokens, 5)
-        self.assertEqual(client.usage.cost.total_cost_USD, Decimal("0.000639"))
+        self.assertEqual(client.usage.cost.total_cost_USD, Decimal("0.0004255"))
 
     async def test_google_timeout_structured_and_thinking_usage(self):
         class Answer(BaseModel):
@@ -182,6 +187,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(answer, Answer)
         self.assertEqual(answer.value, "yes")
         self.assertIs(sdk.messages.parse.call_args.kwargs["output_format"], Answer)
+        self.assertNotIn("extra_body", sdk.messages.parse.call_args.kwargs)
         self.assertEqual(client.usage.tokens.total_tokens, 15)
 
     async def test_typesafe_custom_response_model(self):
@@ -344,6 +350,7 @@ class EntrypointTests(unittest.IsolatedAsyncioTestCase):
             self.assertIs(wrapper.usage, wrapper._client.usage)
             self.assertIs(wrapper.last_usage, wrapper._client.last_usage)
             self.assertEqual(wrapper.last_usage.tokens.total_tokens, 120)
+            self.assertEqual(wrapper.usage.cost.total_cost_USD, Decimal("0.000069"))
             await wrapper.query(prompt="hi")
             self.assertEqual(wrapper.usage.tokens.total_tokens, 240)
             self.assertEqual(wrapper.last_usage.tokens.total_tokens, 120)

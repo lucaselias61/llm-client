@@ -48,25 +48,36 @@ EMBEDDINGS_MODEL = "text-embedding-3-small"
 PROVIDER_CATALOG: dict[str, ProviderConfig] = {
     "openai": ProviderConfig(
         provider="openai",
-        default_model="gpt-4.1-mini",
+        default_model="gpt-6-luna",
     ),
     "anthropic": ProviderConfig(
         provider="anthropic",
-        default_model="claude-sonnet",
+        default_model="claude-sonnet-5-5",
     ),
     "gemini": ProviderConfig(
         provider="gemini",
-        default_model="gemini-2.5-flash",
+        default_model="gemini-3.5-flash-lite",
     ),
     "typesafeai": ProviderConfig(provider="typesafeai", default_model="jev-latest"),
 }
 
 MODEL_CATALOG: dict[str, ModelConfig] = {
+    "gemini-3.5-flash-lite": ModelConfig(
+        provider="gemini",
+        model_name="gemini-3.5-flash-lite",
+        pricing=ModelPricing(
+            input_per_1m=0.30, output_per_1m=2.50, cached_input_per_1m=0.03
+        ),
+    ),
     "gemini-2.5-flash": ModelConfig(
         provider="gemini",
         model_name="gemini-2.5-flash",
         pricing=ModelPricing(
             input_per_1m=0.30, output_per_1m=2.50, cached_input_per_1m=0.03
+        ),
+        notes=(
+            "Deprecated: shuts down 2026-12-01, after which requests route to "
+            "gemini-3.5-flash-lite."
         ),
     ),
     "jev-latest": ModelConfig(
@@ -81,16 +92,38 @@ MODEL_CATALOG: dict[str, ModelConfig] = {
         pricing=ModelPricing(input_per_1m=0.042, output_per_1m=0.0),
         reasoning_model=False,
     ),
+    "gpt-6-luna": ModelConfig(
+        provider="openai",
+        model_name="gpt-6-luna",
+        # Rates for prompts up to 272K input tokens; longer prompts cost more.
+        pricing=ModelPricing(
+            input_per_1m=0.10,
+            cached_input_per_1m=0.01,
+            output_per_1m=0.50,
+        ),
+        reasoning_model=True,
+    ),
+    "gpt-6.1-terra": ModelConfig(
+        provider="openai",
+        model_name="gpt-6.1-terra",
+        # Rates for prompts up to 272K input tokens; longer prompts cost more.
+        pricing=ModelPricing(
+            input_per_1m=1.00,
+            cached_input_per_1m=0.05,
+            output_per_1m=5.00,
+        ),
+        reasoning_model=True,
+    ),
     "gpt-4.1-mini": ModelConfig(
         provider="openai",
         model_name="gpt-4.1-mini",
         pricing=ModelPricing(
-            input_per_1m=0.80,
-            cached_input_per_1m=0.20,
-            output_per_1m=3.20,
-            training_per_1m=5.00,
+            input_per_1m=0.40,
+            cached_input_per_1m=0.10,
+            output_per_1m=1.60,
         ),
         reasoning_model=False,
+        notes="Deprecated: shuts down 2027-01-14. Replacement: gpt-6-luna.",
     ),
     "gpt-5-mini": ModelConfig(
         provider="openai",
@@ -102,17 +135,20 @@ MODEL_CATALOG: dict[str, ModelConfig] = {
             training_per_1m=None,
         ),
         reasoning_model=True,
+        notes="Deprecated: shuts down 2026-12-11. Replacement: gpt-6.1-terra.",
     ),
-    "claude-sonnet": ModelConfig(
+    "claude-sonnet-5-5": ModelConfig(
         provider="anthropic",
-        model_name="claude-sonnet",
+        model_name="claude-sonnet-5-5",
         pricing=ModelPricing(
-            input_per_1m=3.00,
-            output_per_1m=15.00,
-            cache_creation_input_per_1m=3.75,
-            cache_read_input_per_1m=0.30,
+            input_per_1m=2.00,
+            output_per_1m=10.00,
+            # 5-minute cache writes; 1-hour writes cost $4.
+            cache_creation_input_per_1m=2.50,
+            cache_read_input_per_1m=0.10,
         ),
-        reasoning_model=False,
+        # Thinking is on by default and non-default temperature is rejected.
+        reasoning_model=True,
     ),
 }
 

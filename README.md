@@ -15,7 +15,7 @@ from llm_client import LLMClient
 
 
 async def main():
-    async with LLMClient(model_name="gpt-4.1-mini", max_concurrency=10) as client:
+    async with LLMClient(model_name="gpt-6-luna", max_concurrency=10) as client:
         print(await client.query(prompt="Explain async Python in one sentence."))
         print(client.usage)
 
@@ -26,9 +26,9 @@ asyncio.run(main())
 `LLMClient` is the public entrypoint. It selects the provider from `model_name`
 and delegates queries, usage tracking, and cleanup to its provider client.
 It defaults to `max_concurrency=1`; queries are always asynchronous.
-Set a default sampling temperature with `LLMClient(model_name="gpt-4.1-mini", temperature=0.2)`.
+Set a default sampling temperature with `LLMClient(model_name="gemini-3.5-flash-lite", temperature=0.2)`.
 Override it for an individual call with `await client.query(prompt="...", temperature=0.8)`.
-When omitted, the provider's default applies. OpenAI reasoning models omit temperature;
+When omitted, the provider's default applies. OpenAI reasoning models and Claude Sonnet 5.5 omit temperature;
 TypeSafe AI accepts it through the shared interface but ignores it when calling Jev.
 
 `Client` is the abstract base implemented by the provider classes. You can also
@@ -36,9 +36,9 @@ instantiate a provider directly:
 
 | Class | Module | Default model | Query inputs |
 | --- | --- | --- | --- |
-| `OpenAIClient` | `llm_client.openai` | `gpt-4.1-mini` | `prompt`, optional `system_prompt` |
-| `AnthropicClient` | `llm_client.anthropic` | `claude-sonnet` | `prompt`, optional `system_prompt` |
-| `GoogleClient` | `llm_client.google` | `gemini-2.5-flash` | `prompt`, optional `system_prompt` |
+| `OpenAIClient` | `llm_client.openai` | `gpt-6-luna` | `prompt`, optional `system_prompt` |
+| `AnthropicClient` | `llm_client.anthropic` | `claude-sonnet-5-5` | `prompt`, optional `system_prompt` |
+| `GoogleClient` | `llm_client.google` | `gemini-3.5-flash-lite` | `prompt`, optional `system_prompt` |
 | `TypeSafeAIClient` | `llm_client.typesafeai` | `jev-latest` | `state`, `questions` |
 
 All classes are exported from `llm_client`. Constructors accept `model_name`
@@ -46,8 +46,8 @@ and `max_concurrency`. Direct provider clients default to their model shown abov
 and `max_concurrency=50`; the entrypoint requires a model name. Credentials are
 read from the environment when the provider SDK client is constructed.
 Models must be registered in `_config.py` and belong to the class's provider.
-The existing Anthropic catalog entry is preserved; use a model ID available to
-your account when configuring the catalog.
+`gpt-4.1-mini`, `gpt-5-mini`, and `gemini-2.5-flash` remain registered but are
+deprecated by their providers; each entry's `notes` gives its shutdown date.
 
 Text clients accept `temperature`, `max_output_tokens`, and `timeout` in seconds.
 All text clients accept a Pydantic model class as `text_format` and return
