@@ -9,6 +9,7 @@ from typing import Any, ClassVar, Self, overload
 from pydantic import BaseModel
 
 from ._config import (
+    ModelConfig,
     get_default_model_for_provider,
     get_model_config,
     get_provider_config,
@@ -92,11 +93,15 @@ class Client(ABC):
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
+    def _billing_model(self) -> ModelConfig:
+        """Model whose pricing is used to cost recorded usage."""
+        return self.model
+
     def _add_response_usage(self, **kwargs: int) -> None:
         # Cached and reasoning tokens are already included in input/output totals.
         kwargs.setdefault(
             "total_tokens",
             kwargs.get("input_tokens", 0) + kwargs.get("output_tokens", 0),
         )
-        self.last_usage = get_usage(self.model, UsageBreakdown(**kwargs))
+        self.last_usage = get_usage(self._billing_model(), UsageBreakdown(**kwargs))
         self.usage += self.last_usage

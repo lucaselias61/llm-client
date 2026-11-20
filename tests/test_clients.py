@@ -1,6 +1,8 @@
 import asyncio
+import json
 import unittest
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock, patch
 
@@ -11,7 +13,9 @@ from typesafe_sdk import Noul, SystemOneResponse
 
 from llm_client import (
     AnthropicClient,
+    ClaudeClient,
     Client,
+    CodexClient,
     GoogleClient,
     LLMClient,
     OpenAIClient,
@@ -400,6 +404,222 @@ class EntrypointTests(unittest.IsolatedAsyncioTestCase):
                 state="Help!", questions=questions, model="jev-latest", timeout=None
             )
         sdk.aclose.assert_awaited_once()
+
+
+SUBPROCESS = "llm_client._subscription.asyncio.create_subprocess_exec"
+
+
+class FakeCodex:
+    """Stands in for `codex` subprocesses and records their arguments."""
+
+    def __init__(self, status="Logged in using ChatGPT", output='{"value": "yes"}'):
+        self.status = status
+        self.output = output
+        self.calls = []
+        self.schema = None
+
+    async def __call__(self, *args, **kwargs):
+        args = list(args[1:])
+        self.calls.append(args)
+        process = NS(returncode=0, wait=AsyncMock(return_value=0))
+        if args[:2] == ["login", "status"]:
+            out = self.status.encode()
+            if "Not logged in" in self.status:
+                process.returncode = 1
+        elif args == ["login"]:
+            self.status = "Logged in using ChatGPT"
+            out = b""
+        else:
+            if "--output-schema" in args:
+                schema = args[args.index("--output-schema") + 1]
+                self.schema = Path(schema).read_text()
+            out_path = args[args.index("--output-last-message") + 1]
+            Path(out_path).write_text(self.output)
+            usage = {
+                "input_tokens": 100,
+                "cached_input_tokens": 40,
+                "output_tokens": 20,
+                "reasoning_output_tokens": 5,
+            }
+            out = (
+                b'{"type":"turn.started"}\n'
+                + json.dumps({"type": "turn.completed", "usage": usage}).encode()
+            )
+        process.communicate = AsyncMock(return_value=(out, b""))
+        return process
+
+
+class CodexTests(unittest.IsolatedAsyncioTestCase):
+    async def test_structured_query_runs_codex_exec(self):
+        class Answer(BaseModel):
+            value: str
+
+        fake = FakeCodex()
+        client = make_client(CodexClient, "codex")
+        with patch(SUBPROCESS, fake):
+            result = await client.query(
+                prompt="hi", text_format=Answer, system_prompt="be brief"
+            )
+            await client.query(prompt="again")
+        self.assertEqual(result, Answer(value="yes"))
+        exec_args = fake.calls[1]
+        self.assertEqual(exec_args[0], "exec")
+        self.assertIn("--ignore-user-config", exec_args)
+        self.assertEqual(exec_args[exec_args.index("--model") + 1], "gpt-6-luna")
+        self.assertIn('developer_instructions="be brief"', exec_args)
+        self.assertFalse(json.loads(fake.schema)["additionalProperties"])
+        # Login status is only checked once per client.
+        self.assertEqual(sum(c[:2] == ["login", "status"] for c in fake.calls), 1)
+        self.assertEqual(client.last_usage.tokens.total_tokens, 120)
+        self.assertEqual(client.last_usage.tokens.cached_tokens, 40)
+        self.assertEqual(client.usage.cost.total_cost_USD, Decimal(0))
+
+    async def test_api_model_prices_do_not_apply_to_subscription(self):
+        fake = FakeCodex()
+        client = make_client(CodexClient, "codex", model_name="gpt-6-astra")
+        with patch(SUBPROCESS, fake):
+            await client.query(prompt="hi")
+        self.assertEqual(client.model.provider, "openai")
+        self.assertGreater(client.model.pricing.input_per_1m, 0)
+        self.assertEqual(client.usage.tokens.input_tokens, 100)
+        self.assertEqual(client.usage.cost.total_cost_USD, Decimal(0))
+
+    def test_use_subscription_selects_codex(self):
+        with patch.object(CodexClient, "_build_client", return_value="codex"):
+            wrapper = LLMClient("gpt-6.1-sol", use_subscription=True)
+        self.assertIsInstance(wrapper._client, CodexClient)
+        self.assertEqual(wrapper._client.model.model_name, "gpt-6.1-sol")
+        with patch.object(OpenAIClient, "_build_client", return_value=NS()):
+            self.assertIsInstance(LLMClient("gpt-6.1-sol")._client, OpenAIClient)
+
+    def test_use_subscription_requires_a_subscription_cli(self):
+        with (
+            patch.object(GoogleClient, "_build_client") as build,
+            self.assertRaisesRegex(ValueError, "no subscription CLI"),
+        ):
+            LLMClient("gemini-3.5-flash-lite", use_subscription=True)
+        build.assert_not_called()
+
+    async def test_logs_in_when_logged_out(self):
+        fake = FakeCodex(status="Not logged in")
+        client = make_client(CodexClient, "codex")
+        with (
+            patch(SUBPROCESS, fake),
+            patch("sys.stderr"),
+        ):
+            self.assertEqual(await client.query(prompt="hi"), '{"value": "yes"}')
+        self.assertEqual(fake.calls[1], ["login"])
+
+    async def test_rejects_api_key_login(self):
+        fake = FakeCodex(status="Logged in using an API key - sk-***")
+        client = make_client(CodexClient, "codex")
+        with (
+            patch(SUBPROCESS, fake),
+            self.assertRaisesRegex(RuntimeError, "ChatGPT subscription"),
+        ):
+            await client.query(prompt="hi")
+
+
+class FakeClaude:
+    """Stands in for `claude` subprocesses and records their arguments."""
+
+    def __init__(self, status=None, result=None):
+        self.status = status or {"loggedIn": True, "authMethod": "claude.ai"}
+        self.result = result or {
+            "is_error": False,
+            "result": "hello",
+            "structured_output": {"value": "yes"},
+            "usage": {
+                "input_tokens": 10,
+                "cache_creation_input_tokens": 50,
+                "cache_read_input_tokens": 40,
+                "output_tokens": 20,
+                "output_tokens_details": {"thinking_tokens": 5},
+            },
+        }
+        self.calls = []
+        self.kwargs = []
+
+    async def __call__(self, *args, **kwargs):
+        args = list(args[1:])
+        self.calls.append(args)
+        self.kwargs.append(kwargs)
+        process = NS(returncode=0, wait=AsyncMock(return_value=0))
+        if args[:2] == ["auth", "status"]:
+            out = json.dumps(self.status).encode()
+            process.returncode = 0 if self.status.get("loggedIn") else 1
+        elif args[:2] == ["auth", "login"]:
+            self.status = {"loggedIn": True, "authMethod": "claude.ai"}
+            out = b""
+        else:
+            out = json.dumps(self.result).encode()
+            process.returncode = 1 if self.result.get("is_error") else 0
+        process.communicate = AsyncMock(return_value=(out, b""))
+        return process
+
+
+class ClaudeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_structured_query_runs_claude_print(self):
+        class Answer(BaseModel):
+            value: str
+
+        fake = FakeClaude()
+        client = make_client(ClaudeClient, "claude")
+        with (
+            patch(SUBPROCESS, fake),
+            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}),
+        ):
+            result = await client.query(
+                prompt="hi", text_format=Answer, reasoning_effort="low"
+            )
+            self.assertEqual(await client.query(prompt="again"), "hello")
+        self.assertEqual(result, Answer(value="yes"))
+        args = fake.calls[1]
+        self.assertEqual(args[0], "-p")
+        self.assertEqual(args[args.index("--model") + 1], "claude-sonnet-5-5")
+        self.assertEqual(args[args.index("--tools") + 1], "")
+        self.assertEqual(args[args.index("--effort") + 1], "low")
+        self.assertIn("--setting-sources", args)
+        schema = json.loads(args[args.index("--json-schema") + 1])
+        self.assertEqual(schema["required"], ["value"])
+        self.assertNotIn("--json-schema", fake.calls[2])
+        # An API key in the environment would bill tokens instead of the plan.
+        self.assertTrue(all("ANTHROPIC_API_KEY" not in kw["env"] for kw in fake.kwargs))
+        self.assertEqual(sum(c[:2] == ["auth", "status"] for c in fake.calls), 1)
+        self.assertEqual(client.last_usage.tokens.total_tokens, 30)
+        self.assertEqual(client.last_usage.tokens.cache_read_input_tokens, 40)
+        self.assertEqual(client.usage.cost.total_cost_USD, Decimal(0))
+
+    async def test_logs_in_when_logged_out(self):
+        fake = FakeClaude(status={"loggedIn": False})
+        client = make_client(ClaudeClient, "claude")
+        with patch(SUBPROCESS, fake), patch("sys.stderr"):
+            self.assertEqual(await client.query(prompt="hi"), "hello")
+        self.assertEqual(fake.calls[1], ["auth", "login", "--claudeai"])
+
+    async def test_rejects_console_login(self):
+        fake = FakeClaude(status={"loggedIn": True, "authMethod": "console"})
+        client = make_client(ClaudeClient, "claude")
+        with (
+            patch(SUBPROCESS, fake),
+            self.assertRaisesRegex(RuntimeError, "Claude subscription"),
+        ):
+            await client.query(prompt="hi")
+
+    async def test_error_result_raises_without_usage(self):
+        fake = FakeClaude(result={"is_error": True, "result": "model not found"})
+        client = make_client(ClaudeClient, "claude")
+        with (
+            patch(SUBPROCESS, fake),
+            self.assertRaisesRegex(RuntimeError, "model not found"),
+        ):
+            await client.query(prompt="hi")
+        self.assertEqual(client.usage.tokens.total_tokens, 0)
+
+    def test_use_subscription_selects_claude(self):
+        with patch.object(ClaudeClient, "_build_client", return_value="claude"):
+            wrapper = LLMClient("claude-sonnet-5-5", use_subscription=True)
+        self.assertIsInstance(wrapper._client, ClaudeClient)
 
 
 if __name__ == "__main__":

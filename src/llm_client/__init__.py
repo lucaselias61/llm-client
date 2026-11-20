@@ -13,7 +13,9 @@ from ._config import (
 )
 from ._usage import CostBreakdown, Usage, UsageBreakdown
 from .anthropic import AnthropicClient
+from .claude import ClaudeClient
 from .client import Client
+from .codex import CodexClient
 from .google import GoogleClient
 from .openai import OpenAIClient
 from .typesafeai import TypeSafeAIClient
@@ -25,7 +27,9 @@ __all__ = [
     "MODEL_CATALOG",
     "PROVIDER_CATALOG",
     "AnthropicClient",
+    "ClaudeClient",
     "Client",
+    "CodexClient",
     "CostBreakdown",
     "GoogleClient",
     "LLMClient",
@@ -47,6 +51,22 @@ client_classes: dict[str, type[Client]] = {
     "typesafeai": TypeSafeAIClient,
 }
 
+# Clients for each provider's `subscription_cli`, used with `use_subscription=True`.
+subscription_client_classes: dict[str, type[Client]] = {
+    "claude": ClaudeClient,
+    "codex": CodexClient,
+}
+
+
+def _subscription_client_class(provider: str) -> type[Client]:
+    provider_config = PROVIDER_CATALOG.get(provider)
+    cli = provider_config.subscription_cli if provider_config else None
+    if cli is None:
+        raise ValueError(f"Provider {provider} has no subscription CLI")
+    if cli not in subscription_client_classes:
+        raise ValueError(f"Unsupported subscription CLI: {cli}")
+    return subscription_client_classes[cli]
+
 
 class LLMClient:
     def __init__(
@@ -55,15 +75,20 @@ class LLMClient:
         max_concurrency: int = 1,
         *,
         temperature: float | None = None,
+        use_subscription: bool = False,
     ) -> None:
         model_config = get_model_config(model_name)
         if model_config is None:
             raise ValueError(f"Unsupported model: {model_name}")
         provider = model_config.provider
-        if provider not in client_classes:
+        if use_subscription:
+            client_class = _subscription_client_class(provider)
+        elif provider in client_classes:
+            client_class = client_classes[provider]
+        else:
             raise ValueError(f"Unsupported provider: {provider}")
         self.temperature = temperature
-        self._client: Client = client_classes[provider](
+        self._client: Client = client_class(
             model_name=model_name, max_concurrency=max_concurrency
         )
 
