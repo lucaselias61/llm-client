@@ -8,6 +8,15 @@
 - add CHANGELOG - (90099c1) - lucaselias61
 
 - - -
+## v3.1.0 - 2026-11-20
+#### Features
+- add use_subscription with Codex and Claude Code clients - (6327106) - lucaselias61
+- add gpt-6.1-sol and gpt-6-astra models - (80256ed) - lucaselias61
+#### Documentation
+- document subscription clients - (1cac63d) - lucaselias61
+
+- - -
+
 ## v3.0.0 - 2026-11-16
 #### Features
 - <span style="background-color: #d73a49; color: white; padding: 2px 6px; border-radius: 3px; font-weight: bold; font-size: 0.85em;">BREAKING</span>update model catalog to current provider models - (9ceafd8) - lucaselias61
