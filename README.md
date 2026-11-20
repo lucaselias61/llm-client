@@ -1,6 +1,7 @@
 # llm-client
 
 Async Python clients for OpenAI, Anthropic, Google Gemini, and TypeSafe AI Jev.
+OpenAI and Anthropic models can also run through the local Codex and Claude Code CLIs\non a ChatGPT or Claude subscription.
 
 Install dependencies with `uv sync`. Set the appropriate environment variable:
 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`,
@@ -40,6 +41,8 @@ instantiate a provider directly:
 | `AnthropicClient` | `llm_client.anthropic` | `claude-sonnet-5-5` | `prompt`, optional `system_prompt` |
 | `GoogleClient` | `llm_client.google` | `gemini-3.5-flash-lite` | `prompt`, optional `system_prompt` |
 | `TypeSafeAIClient` | `llm_client.typesafeai` | `jev-latest` | `state`, `questions` |
+| `CodexClient` | `llm_client.codex` | `gpt-6-luna` | `prompt`, optional `system_prompt`, `reasoning_effort` |
+| `ClaudeClient` | `llm_client.claude` | `claude-sonnet-5-5` | `prompt`, optional `system_prompt`, `reasoning_effort` |
 
 All classes are exported from `llm_client`. Constructors accept `model_name`
 and `max_concurrency`. Direct provider clients default to their model shown above
@@ -53,6 +56,39 @@ Text clients accept `temperature`, `max_output_tokens`, and `timeout` in seconds
 All text clients accept a Pydantic model class as `text_format` and return
 an instance validated against that model. Anthropic uses its SDK's structured-output parser; the selected model must support structured outputs.
 OpenAI provides `await client.generate_embedding(input="...")`.
+
+## Subscriptions (Codex and Claude Code CLIs)
+
+```python
+LLMClient("gpt-6.1-sol", use_subscription=True)        # codex exec on your ChatGPT plan
+LLMClient("claude-sonnet-5-5", use_subscription=True)  # claude -p on your Claude plan
+LLMClient("gpt-6.1-sol")                               # OpenAI API, billed per token
+```
+
+`use_subscription=True` runs the model through the provider's `subscription_cli`
+from `_config.py` instead of its API: `codex` for OpenAI and `claude` for Anthropic.
+Other providers raise `ValueError`. The subscription clients share the API clients'
+model entries and track tokens the same way, but report a cost of $0. Not every API
+model is available on a subscription (e.g. `gpt-4.1-mini` on ChatGPT); the CLI's
+error says so.
+
+| Class | Module | Runs | Login |
+| --- | --- | --- | --- |
+| `CodexClient` | `llm_client.codex` | `codex exec --output-schema schema.json -o out.json` | `codex login` (ChatGPT) |
+| `ClaudeClient` | `llm_client.claude` | `claude -p --output-format json --json-schema ...` | `claude auth login --claudeai` |
+
+The CLI must be on `PATH`. If it is logged out, the first query runs its login
+command so you can sign in; logins that bill API tokens instead (Codex API keys,
+Anthropic Console, Bedrock/Vertex) are rejected. `ClaudeClient` also removes
+`ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` from the CLI's environment, since
+Claude Code would bill them instead of your plan.
+
+Each call runs in an empty temporary directory without your CLI settings, MCP servers
+or project files (pass `use_user_config=True` to load your settings). Codex runs in
+a read-only sandbox; Claude Code runs with no tools and the system prompt
+"You are a helpful assistant." unless you pass `system_prompt`. Both accept
+`reasoning_effort`. `temperature` is accepted but ignored, and `max_output_tokens`
+is not supported.
 
 ## Jev decisions
 
