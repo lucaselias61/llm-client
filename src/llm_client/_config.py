@@ -20,6 +20,9 @@ __all__ = [
 class ProviderConfig:
     provider: str
     default_model: str
+    # Local CLI that runs this provider's models on a paid subscription instead
+    # of per-token API billing. Selected with `LLMClient(..., use_subscription=True)`.
+    subscription_cli: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,10 +52,12 @@ PROVIDER_CATALOG: dict[str, ProviderConfig] = {
     "openai": ProviderConfig(
         provider="openai",
         default_model="gpt-6-luna",
+        subscription_cli="codex",
     ),
     "anthropic": ProviderConfig(
         provider="anthropic",
         default_model="claude-sonnet-5-5",
+        subscription_cli="claude",
     ),
     "gemini": ProviderConfig(
         provider="gemini",
@@ -148,6 +153,28 @@ MODEL_CATALOG: dict[str, ModelConfig] = {
             cache_read_input_per_1m=0.10,
         ),
         # Thinking is on by default and non-default temperature is rejected.
+        reasoning_model=True,
+    ),
+    "gpt-6.1-sol": ModelConfig(
+        provider="openai",
+        model_name="gpt-6.1-sol",
+        # Rates for prompts up to 272K input tokens; longer prompts cost more.
+        pricing=ModelPricing(
+            input_per_1m=2.00,
+            cached_input_per_1m=0.10,
+            output_per_1m=10.00,
+        ),
+        reasoning_model=True,
+    ),
+    "gpt-6-astra": ModelConfig(
+        provider="openai",
+        model_name="gpt-6-astra",
+        # Rates for prompts up to 272K input tokens; longer prompts cost more.
+        pricing=ModelPricing(
+            input_per_1m=10.00,
+            cached_input_per_1m=1.00,
+            output_per_1m=50.00,
+        ),
         reasoning_model=True,
     ),
 }
